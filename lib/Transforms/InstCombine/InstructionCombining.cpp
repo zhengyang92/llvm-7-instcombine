@@ -137,6 +137,12 @@ MaxArraySize("instcombine-maxarray-size", cl::init(1024),
 static cl::opt<unsigned> ShouldLowerDbgDeclare("instcombine-lower-dbg-declare",
                                                cl::Hidden, cl::init(true));
 
+bool DisableInstCombine;
+static cl::opt<bool, true> DisableInstructionCombiner(
+    "disable-instruction-combiner", cl::Hidden,
+    cl::desc("Disable InstCombine Pass (default = off)"),
+    cl::location(DisableInstCombine));
+
 Value *InstCombiner::EmitGEPOffset(User *GEP) {
   return llvm::EmitGEPOffset(&Builder, DL, GEP);
 }

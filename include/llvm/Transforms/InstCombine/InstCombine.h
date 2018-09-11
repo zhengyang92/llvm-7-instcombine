@@ -21,6 +21,8 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
 
+extern bool DisableInstCombine;
+
 namespace llvm {
 
 class InstCombinePass : public PassInfoMixin<InstCombinePass> {

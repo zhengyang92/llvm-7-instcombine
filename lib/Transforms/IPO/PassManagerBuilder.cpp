@@ -241,7 +241,8 @@ void PassManagerBuilder::addInitialAliasAnalysisPasses(
 void PassManagerBuilder::addInstructionCombiningPass(
     legacy::PassManagerBase &PM) const {
   bool ExpensiveCombines = OptLevel > 2;
-  PM.add(createInstructionCombiningPass(ExpensiveCombines));
+  if (!DisableInstCombine)
+    PM.add(createInstructionCombiningPass(ExpensiveCombines));
 }
 
 void PassManagerBuilder::populateFunctionPassManager(
@@ -285,7 +286,8 @@ void PassManagerBuilder::addPGOInstrPasses(legacy::PassManagerBase &MPM) {
     MPM.add(createSROAPass());
     MPM.add(createEarlyCSEPass());             // Catch trivial redundancies
     MPM.add(createCFGSimplificationPass());    // Merge & remove BBs
-    MPM.add(createInstructionCombiningPass()); // Combine silly seq's
+    if (!DisableInstCombine)
+      MPM.add(createInstructionCombiningPass()); // Combine silly seq's
     addExtensionsToPM(EP_Peephole, MPM);
   }
   if (EnablePGOInstrGen) {
@@ -326,9 +328,11 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   MPM.add(createCorrelatedValuePropagationPass()); // Propagate conditionals
   MPM.add(createCFGSimplificationPass());     // Merge & remove BBs
   // Combine silly seq's
-  if (OptLevel > 2)
-    MPM.add(createAggressiveInstCombinerPass());
-  addInstructionCombiningPass(MPM);
+  if (!DisableInstCombine) {
+    if (OptLevel > 2)
+      MPM.add(createAggressiveInstCombinerPass());
+    addInstructionCombiningPass(MPM);
+  }
   if (SizeLevel == 0 && !DisableLibCallsShrinkWrap)
     MPM.add(createLibCallsShrinkWrapPass());
   addExtensionsToPM(EP_Peephole, MPM);
@@ -360,7 +364,8 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   // simplify-cfg. Eventually loop-simplifycfg should be enhanced to replace the
   // need for this.
   MPM.add(createCFGSimplificationPass());
-  addInstructionCombiningPass(MPM);
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(MPM);
   // We resume loop passes creating a second loop pipeline here.
   MPM.add(createIndVarSimplifyPass());        // Canonicalize indvars
   MPM.add(createLoopIdiomPass());             // Recognize idioms like memset.
@@ -392,7 +397,8 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
 
   // Run instcombine after redundancy elimination to exploit opportunities
   // opened up by them.
-  addInstructionCombiningPass(MPM);
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(MPM);
   addExtensionsToPM(EP_Peephole, MPM);
   MPM.add(createJumpThreadingPass());         // Thread jumps
   MPM.add(createCorrelatedValuePropagationPass());
@@ -409,7 +415,8 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   MPM.add(createAggressiveDCEPass());         // Delete dead instructions
   MPM.add(createCFGSimplificationPass()); // Merge & remove BBs
   // Clean up after everything.
-  addInstructionCombiningPass(MPM);
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(MPM);
   addExtensionsToPM(EP_Peephole, MPM);
 }
 
@@ -502,7 +509,8 @@ void PassManagerBuilder::populateModulePassManager(
 
   MPM.add(createDeadArgEliminationPass()); // Dead argument elimination
 
-  addInstructionCombiningPass(MPM); // Clean up after IPCP & DAE
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(MPM); // Clean up after IPCP & DAE
   addExtensionsToPM(EP_Peephole, MPM);
   MPM.add(createCFGSimplificationPass()); // Clean up after IPCP & DAE
 
@@ -638,7 +646,8 @@ void PassManagerBuilder::populateModulePassManager(
   // on -O1 and no #pragma is found). Would be good to have these two passes
   // as function calls, so that we can only pass them when the vectorizer
   // changed the code.
-  addInstructionCombiningPass(MPM);
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(MPM);
   if (OptLevel > 1 && ExtraVectorizerPasses) {
     // At higher optimization levels, try to clean up any runtime overlap and
     // alignment checks inserted by the vectorizer. We want to track correllated
@@ -648,11 +657,13 @@ void PassManagerBuilder::populateModulePassManager(
     // dead (or speculatable) control flows or more combining opportunities.
     MPM.add(createEarlyCSEPass());
     MPM.add(createCorrelatedValuePropagationPass());
-    addInstructionCombiningPass(MPM);
+    if (!DisableInstCombine)
+      addInstructionCombiningPass(MPM);
     MPM.add(createLICMPass());
     MPM.add(createLoopUnswitchPass(SizeLevel || OptLevel < 3, DivergentTarget));
     MPM.add(createCFGSimplificationPass());
-    addInstructionCombiningPass(MPM);
+    if (!DisableInstCombine)
+      addInstructionCombiningPass(MPM);
   }
 
   // Cleanup after loop vectorization, etc. Simplification passes like CVP and
@@ -670,7 +681,8 @@ void PassManagerBuilder::populateModulePassManager(
   }
 
   addExtensionsToPM(EP_Peephole, MPM);
-  addInstructionCombiningPass(MPM);
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(MPM);
 
   if (!DisableUnrollLoops) {
     if (EnableUnrollAndJam) {
@@ -683,7 +695,8 @@ void PassManagerBuilder::populateModulePassManager(
     MPM.add(createLoopUnrollPass(OptLevel));    // Unroll small loops
 
     // LoopUnroll may generate some redundency to cleanup.
-    addInstructionCombiningPass(MPM);
+    if (!DisableInstCombine)
+      addInstructionCombiningPass(MPM);
 
     // Runtime unrolling will introduce runtime check in loop prologue. If the
     // unrolled loop is a inner loop, then the prologue will be inside the
@@ -801,9 +814,11 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
   // simplification opportunities, and both can propagate functions through
   // function pointers.  When this happens, we often have to resolve varargs
   // calls, etc, so let instcombine do this.
-  if (OptLevel > 2)
-    PM.add(createAggressiveInstCombinerPass());
-  addInstructionCombiningPass(PM);
+  if (!DisableInstCombine) {
+    if (OptLevel > 2)
+      PM.add(createAggressiveInstCombinerPass());
+    addInstructionCombiningPass(PM);
+  }
   addExtensionsToPM(EP_Peephole, PM);
 
   // Inline small functions
@@ -825,7 +840,8 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
   PM.add(createArgumentPromotionPass());
 
   // The IPO passes may leave cruft around.  Clean up after them.
-  addInstructionCombiningPass(PM);
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(PM);
   addExtensionsToPM(EP_Peephole, PM);
   PM.add(createJumpThreadingPass());
 
@@ -861,10 +877,12 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
   // Now that we've optimized loops (in particular loop induction variables),
   // we may have exposed more scalar opportunities. Run parts of the scalar
   // optimizer again at this point.
-  addInstructionCombiningPass(PM); // Initial cleanup
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(PM); // Initial cleanup
   PM.add(createCFGSimplificationPass()); // if-convert
   PM.add(createSCCPPass()); // Propagate exposed constants
-  addInstructionCombiningPass(PM); // Clean up again
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(PM); // Clean up again
   PM.add(createBitTrackingDCEPass());
 
   // More scalar chains could be vectorized due to more alias information
@@ -877,7 +895,8 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
   PM.add(createAlignmentFromAssumptionsPass());
 
   // Cleanup and simplify the code after the scalar optimizations.
-  addInstructionCombiningPass(PM);
+  if (!DisableInstCombine)
+    addInstructionCombiningPass(PM);
   addExtensionsToPM(EP_Peephole, PM);
 
   PM.add(createJumpThreadingPass());
